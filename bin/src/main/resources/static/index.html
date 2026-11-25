@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShopEasy - Basic E-Commerce</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;font-family:Segoe UI,Arial,sans-serif}
+  body{background:#f4f6f8;color:#222}
+  header{background:#1f2937;color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
+  header h1{font-size:20px}
+  nav button{background:none;border:none;color:#fff;margin-left:16px;font-size:15px;cursor:pointer;padding:6px 10px;border-radius:6px}
+  nav button.active,nav button:hover{background:#374151}
+  .container{max-width:1100px;margin:20px auto;padding:0 16px}
+  .search{display:flex;gap:8px;margin-bottom:18px}
+  .search input{flex:1;padding:10px;border:1px solid #ccc;border-radius:8px}
+  button.primary{background:#2563eb;color:#fff;border:none;padding:9px 16px;border-radius:8px;cursor:pointer}
+  button.primary:hover{background:#1d4ed8}
+  button.danger{background:#dc2626;color:#fff;border:none;padding:6px 10px;border-radius:6px;cursor:pointer}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
+  .card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:6px}
+  .card .img{font-size:56px;text-align:center}
+  .card .cat{font-size:12px;color:#6b7280}
+  .card .price{font-weight:700;font-size:18px}
+  .card .stock{font-size:12px;color:#059669}
+  .card .stock.low{color:#dc2626}
+  .panel{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:10px;border-bottom:1px solid #eee;font-size:14px}
+  input,select{padding:9px;border:1px solid #ccc;border-radius:8px;width:100%;margin-bottom:10px}
+  .total{font-size:20px;font-weight:700;text-align:right;margin:10px 0}
+  .toast{position:fixed;bottom:20px;right:20px;background:#111;color:#fff;padding:12px 18px;border-radius:8px;display:none;z-index:10}
+  .badge{padding:3px 8px;border-radius:12px;font-size:12px;color:#fff}
+  .PAID{background:#059669}.PENDING{background:#d97706}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>🛒 ShopEasy</h1>
+  <nav>
+    <button id="nav-products" class="active" onclick="show('products')">Products</button>
+    <button id="nav-cart" onclick="show('cart')">Cart (<span id="cartCount">0</span>)</button>
+    <button id="nav-orders" onclick="show('orders')">Orders</button>
+    <button id="nav-admin" onclick="show('admin')">Admin</button>
+  </nav>
+</header>
+
+<div class="container">
+
+  <!-- PRODUCTS -->
+  <section id="products">
+    <div class="search">
+      <input id="q" placeholder="Search products or category..." onkeyup="if(event.key==='Enter')loadProducts()">
+      <button class="primary" onclick="loadProducts()">Search</button>
+    </div>
+    <div class="grid" id="productGrid"></div>
+  </section>
+
+  <!-- CART + CHECKOUT -->
+  <section id="cart" class="hidden">
+    <div class="panel">
+      <h2>Your Cart</h2>
+      <table>
+        <thead><tr><th>Product</th><th>Price</th><th>Qty</th><th>Subtotal</th><th></th></tr></thead>
+        <tbody id="cartBody"></tbody>
+      </table>
+      <div class="total">Total: ₹<span id="cartTotal">0</span></div>
+    </div>
+    <div class="panel" id="checkoutPanel">
+      <h2>Checkout</h2><br>
+      <input id="cName" placeholder="Full name">
+      <input id="cAddr" placeholder="Delivery address">
+      <select id="cPay">
+        <option value="UPI">UPI (simulated)</option>
+        <option value="CARD">Credit / Debit Card (simulated)</option>
+        <option value="COD">Cash on Delivery</option>
+      </select>
+      <button class="primary" onclick="checkout()">Pay & Place Order</button>
+    </div>
+  </section>
+
+  <!-- ORDERS -->
+  <section id="orders" class="hidden">
+    <div id="orderList"></div>
+  </section>
+
+  <!-- ADMIN -->
+  <section id="admin" class="hidden">
+    <div class="panel">
+      <h2>Add Product</h2><br>
+      <input id="pName" placeholder="Name">
+      <input id="pDesc" placeholder="Description">
+      <input id="pPrice" type="number" placeholder="Price">
+      <input id="pStock" type="number" placeholder="Stock">
+      <input id="pCat" placeholder="Category">
+      <input id="pImg" placeholder="Emoji (e.g. 📱)">
+      <button class="primary" onclick="addProduct()">Add Product</button>
+    </div>
+    <div class="panel">
+      <h2>Manage Products</h2>
+      <table>
+        <thead><tr><th>ID</th><th>Name</th><th>Price</th><th>Stock</th><th></th></tr></thead>
+        <tbody id="adminBody"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api';
+
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
+
+async function api(path, options){
+  const res = await fetch(API + path, {headers:{'Content-Type':'application/json'}, ...options});
+  if(!res.ok){
+    let msg='Something went wrong';
+    try{ msg=(await res.json()).error || msg; }catch(e){}
+    throw new Error(msg);
+  }
+  return res.status===204 ? null : res.json();
+}
+
+function show(name){
+  ['products','cart','orders','admin'].forEach(s=>{
+    document.getElementById(s).classList.toggle('hidden', s!==name);
+    document.getElementById('nav-'+s).classList.toggle('active', s===name);
+  });
+  if(name==='products') loadProducts();
+  if(name==='cart') loadCart();
+  if(name==='orders') loadOrders();
+  if(name==='admin') loadAdmin();
+}
+
+/* ---------- Products ---------- */
+async function loadProducts(){
+  const q = document.getElementById('q').value.trim();
+  const list = await api('/products' + (q ? '?q=' + encodeURIComponent(q) : ''));
+  document.getElementById('productGrid').innerHTML = list.map(p => `
+    <div class="card">
+      <div class="img">${p.image || '📦'}</div>
+      <div class="cat">${p.category || ''}</div>
+      <strong>${p.name}</strong>
+      <div style="font-size:13px;color:#555">${p.description || ''}</div>
+      <div class="price">₹${p.price}</div>
+      <div class="stock ${p.stock<=5?'low':''}">${p.stock>0 ? p.stock+' in stock' : 'Out of stock'}</div>
+      <button class="primary" ${p.stock===0?'disabled':''} onclick="addToCart(${p.id})">Add to Cart</button>
+    </div>`).join('') || '<p>No products found.</p>';
+  updateCartCount();
+}
+
+/* ---------- Cart ---------- */
+async function addToCart(id){
+  try{ await api('/cart',{method:'POST',body:JSON.stringify({productId:id,quantity:1})}); toast('Added to cart'); updateCartCount(); }
+  catch(e){ toast(e.message); }
+}
+async function updateCartCount(){
+  const items = await api('/cart');
+  document.getElementById('cartCount').textContent = items.reduce((s,i)=>s+i.quantity,0);
+}
+async function loadCart(){
+  const items = await api('/cart');
+  let total = 0;
+  document.getElementById('cartBody').innerHTML = items.map(i=>{
+    const sub = i.product.price * i.quantity; total += sub;
+    return `<tr><td>${i.product.image||''} ${i.product.name}</td><td>₹${i.product.price}</td><td>${i.quantity}</td><td>₹${sub}</td>
+      <td><button class="danger" onclick="removeFromCart(${i.id})">Remove</button></td></tr>`;
+  }).join('') || '<tr><td colspan="5">Cart is empty</td></tr>';
+  document.getElementById('cartTotal').textContent = total;
+  document.getElementById('checkoutPanel').classList.toggle('hidden', items.length===0);
+  document.getElementById('cartCount').textContent = items.reduce((s,i)=>s+i.quantity,0);
+}
+async function removeFromCart(id){ await api('/cart/'+id,{method:'DELETE'}); loadCart(); }
+
+async function checkout(){
+  const body = {
+    customerName: document.getElementById('cName').value.trim(),
+    address: document.getElementById('cAddr').value.trim(),
+    paymentMethod: document.getElementById('cPay').value
+  };
+  try{
+    const order = await api('/orders/checkout',{method:'POST',body:JSON.stringify(body)});
+    toast('Order #'+order.id+' placed! Payment: '+order.paymentStatus);
+    show('orders');
+  }catch(e){ toast(e.message); }
+}
+
+/* ---------- Orders ---------- */
+async function loadOrders(){
+  const orders = await api('/orders');
+  document.getElementById('orderList').innerHTML = orders.map(o=>`
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between">
+        <strong>Order #${o.id} - ${o.customerName}</strong>
+        <span><span class="badge ${o.paymentStatus}">${o.paymentStatus}</span> ${o.paymentMethod}</span>
+      </div>
+      <div style="font-size:13px;color:#666;margin:6px 0">${o.address} • ${new Date(o.createdAt).toLocaleString()} • ${o.status}</div>
+      <table>${o.items.map(i=>`<tr><td>${i.product.image||''} ${i.product.name}</td><td>x${i.quantity}</td><td>₹${i.price*i.quantity}</td></tr>`).join('')}</table>
+      <div class="total">Total: ₹${o.totalAmount}</div>
+    </div>`).join('') || '<p>No orders yet.</p>';
+}
+
+/* ---------- Admin ---------- */
+async function loadAdmin(){
+  const list = await api('/products');
+  document.getElementById('adminBody').innerHTML = list.map(p=>`
+    <tr><td>${p.id}</td><td>${p.name}</td><td>₹${p.price}</td><td>${p.stock}</td>
+    <td><button class="danger" onclick="deleteProduct(${p.id})">Delete</button></td></tr>`).join('');
+}
+async function addProduct(){
+  const body = {
+    name: pName.value.trim(), description: pDesc.value.trim(),
+    price: parseFloat(pPrice.value), stock: parseInt(pStock.value||0),
+    category: pCat.value.trim(), image: pImg.value.trim()
+  };
+  try{
+    await api('/products',{method:'POST',body:JSON.stringify(body)});
+    toast('Product added');
+    [pName,pDesc,pPrice,pStock,pCat,pImg].forEach(e=>e.value='');
+    loadAdmin();
+  }catch(e){ toast(e.message); }
+}
+async function deleteProduct(id){
+  try{ await api('/products/'+id,{method:'DELETE'}); loadAdmin(); }
+  catch(e){ toast('Cannot delete: product is used in a cart/order'); }
+}
+
+loadProducts();
+</script>
+</body>
+</html>
