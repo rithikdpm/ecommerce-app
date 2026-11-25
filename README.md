@@ -1,5 +1,7 @@
 # 🛒 ShopEasy - Basic E-Commerce Application
 
+Codec Technologies Virtual Internship Task 
+
 A simple full-stack e-commerce application built with **Spring Boot, Spring Data JPA (Hibernate), MySQL and REST APIs**, with a lightweight HTML/JavaScript frontend.
 
 ## ✨ Features
